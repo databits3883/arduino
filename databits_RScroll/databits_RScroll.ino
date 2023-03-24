@@ -10,10 +10,11 @@
 #define CHAR_WIDTH 16 /* The width of the array/data */
 #define CHAR_REAL_WIDTH 12 /* The width of the pixels to display */
 
-#define INIT_BRIGHT 60
+#define INIT_BRIGHT 64
 
 //Time for conecube to display, msec
 #define CONE_CUBE_DISPLAY_TIME 3000
+#define SCROLL_DELAY 30
 
 //LED Panel output
 #define DATA_PIN 11
@@ -170,10 +171,10 @@ void changeColor()
   }
 
   //Also check analog potential value only during change color routine, returns 0 - 1024
-  int potVal = analogRead(POT_PIN);  
+  int potVal = analogRead(POT_PIN) / 4;  //Turn into 0-255
   if (potVal > INIT_BRIGHT) 
   {
-    FastLED.setBrightness(potVal/4); //Number 0-255
+    FastLED.setBrightness(potVal); 
   }
 }
 
@@ -196,7 +197,8 @@ void loop()
     if (DEBUG) Serial.println(aChar);  //output the first character in the message
     
     //scroll each pixel of current character from right to left, 0 is full character, 15 is one row shown
-    for (int scrollX = (CHAR_WIDTH-1); scrollX >= 3; scrollX--)
+    //2023-03-24_Try to remove double char delay..  Changing from >= 3 to > 3
+    for (int scrollX = (CHAR_WIDTH-1); scrollX > 3; scrollX--)
     {           
       //poll the buttons, this occurs about every 100 ms
       checkButtons();
@@ -230,34 +232,7 @@ void loop()
       }
       if (isDistanceMode)
       {
-        //int inches = sonar.ping_in();
-        int inches = sonar.convert_in(sonar.ping_median(5));
-        FastLED.clear();
-        if (DEBUG) { Serial.print("sonar read in inches: ");  Serial.println(inches); }
-
-        uint32_t distanceColor = CRGB::Red;
-        //Allow 20 inches on either side
-        if ((inches > (TARGET_DISTANCE-20)) && (inches < TARGET_DISTANCE+20))
-        {
-          boolean negative = false;
-          int deltaInches = (inches - TARGET_DISTANCE)/2;  //Divide by 2
-          if (deltaInches < 0)
-          {
-            negative = true;
-            deltaInches = abs(deltaInches); /* lose sign */
-          }
-          if (deltaInches > 2) distanceColor = CRGB::Yellow;
-          if (deltaInches > 6) distanceColor = CRGB::Green;
-          if (negative) displayChar('=',  -6, distanceColor);
-          //Add 48 to the number to get 0-9 characters
-          displayChar((char)(deltaInches+48), 5, distanceColor);
-        }
-        else
-        {
-          //Fill completely green (too far or too close)
-          for (int jj=0; jj < NUM_LEDS; jj++) leds[jj] = CRGB::Green;
-        }
-        FastLED.show();
+        distanceMode();
         delay(100);
       }
       else
@@ -285,7 +260,7 @@ void loop()
         FastLED.show();  //Show the LED screen
 
         //if (DEBUG) Serial.println(scrollX);
-        delay(100);
+        delay(SCROLL_DELAY);
       } //End if scroll message
     }//end for windowX
   } // end for msgLetter
@@ -360,4 +335,35 @@ void displayChar(char aChar, int offset, uint32_t colorCode)
   }  //end for pixelY
 }
 
+//Turn on the Ultrasonic sensor and display distance on LED until turned off
+void distanceMode()
+{
+  //int inches = sonar.ping_in();
+  int inches = sonar.convert_in(sonar.ping_median(5));
+  FastLED.clear();
+  if (DEBUG) { Serial.print("sonar read in inches: ");  Serial.println(inches); }
 
+  uint32_t distanceColor = CRGB::Red;
+  //Allow 20 inches on either side
+  if ((inches > (TARGET_DISTANCE-20)) && (inches < TARGET_DISTANCE+20))
+  {
+    boolean negative = false;
+    int deltaInches = (inches - TARGET_DISTANCE)/2;  //Divide by 2
+    if (deltaInches < 0)
+    {
+      negative = true;
+      deltaInches = abs(deltaInches); /* lose sign */
+    }
+    if (deltaInches > 2) distanceColor = CRGB::Yellow;
+    if (deltaInches > 6) distanceColor = CRGB::Green;
+    if (negative) displayChar('=',  -6, distanceColor);
+    //Add 48 to the number to get 0-9 characters
+    displayChar((char)(deltaInches+48), 5, distanceColor);
+  }
+  else
+  {
+    //Fill completely green (too far or too close)
+    for (int jj=0; jj < NUM_LEDS; jj++) leds[jj] = CRGB::Green;
+  }
+  FastLED.show();
+}
